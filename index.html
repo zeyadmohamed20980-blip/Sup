@@ -3,124 +3,56 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Saturn Llepie Cloud Runner</title>
-    <style>
-        body { background-color: #121212; color: #ffffff; font-family: sans-serif; text-align: center; padding: 20px; }
-        .control-box { background: #1f1f1f; padding: 20px; border-radius: 8px; display: inline-block; margin-top: 20px; border: 1px solid #333; }
-        input[type="file"], button { padding: 12px; margin: 8px; border-radius: 6px; border: 1px solid #444; font-size: 14px; }
-        button { background-color: #238636; color: white; cursor: pointer; font-weight: bold; border: none; }
-        button:hover { background-color: #2ea043; }
-        button:disabled { background-color: #555; cursor: not-allowed; }
-        .gallery { display: flex; flex-wrap: wrap; justify-content: center; gap: 15px; margin-top: 30px; }
-        .frame { border: 3px solid #333; border-radius: 8px; width: 100%; max-width: 500px; background: #000; min-height: 300px; }
-        #statusText { color: #58a6ff; font-weight: bold; }
-    </style>
+    <title>Browser AI Model</title>
+    <!-- Load TensorFlow.js from a CDN -->
+    <script src="https://jsdelivr.net"></script>
 </head>
 <body>
-    <h1>🪐 Saturn Llepie Cloud Web Player</h1>
-    <p>Upload your custom compiled Saturn APK directly from your computer files to run it on a cloud server.</p>
-
-    <div class="control-box">
-        <input type="file" id="localFile" accept=".apk">
-        <button id="runBtn" onclick="uploadAndExecute()">Launch Saturn APK</button>
-    </div>
-
-    <div class="gallery">
-        <div>
-            <h3 id="statusText">System Monitor: Standing By (Idle)</h3>
-            <img id="monitor" class="frame" src="workspace_screenshots/frame_1.png" alt="Waiting for file upload trigger...">
-        </div>
-    </div>
+    <h1>House Price Predictor AI</h1>
+    <p>This AI model trains and runs entirely in your browser using TensorFlow.js!</p>
+    
+    <button onclick="trainModel()">1. Train Model</button>
+    <br><br>
+    <input type="number" id="sqftInput" placeholder="Enter Sq Ft (e.g., 2000)" disabled>
+    <button id="predictBtn" onclick="predict()" disabled>2. Predict Price</button>
+    <h3 id="result">Status: Click "Train Model" to begin.</h3>
 
     <script>
-        // === CONFIGURATION (FILL THESE OUT) ===
-        const GH_USER = "YOUR_GITHUB_USERNAME"; 
-        const GH_REPO = "YOUR_REPO_NAME";
-        const REPO_PAT = "YOUR_GITHUB_PERSONAL_ACCESS_TOKEN"; 
-        // ======================================
+        let model;
 
-        async function uploadAndExecute() {
-            const fileInput = document.getElementById('localFile');
-            const runBtn = document.getElementById('runBtn');
+        async function trainModel() {
+            document.getElementById('result').innerText = "Training model... please wait...";
             
-            if (fileInput.files.length === 0) {
-                return alert("Please select a Saturn APK file from your computer first!");
-            }
+            // 1. Create a simple linear regression model
+            model = tf.sequential();
+            model.add(tf.layers.dense({units: 1, inputShape: [1]}));
+            model.compile({loss: 'meanSquaredError', optimizer: 'sgd'});
 
-            const file = fileInput.files[0];
-            runBtn.disabled = true;
-            document.getElementById('statusText').innerText = "⏳ Reading your file asset... Please wait.";
+            // 2. Generate dummy training data (X = Sq Ft / 1000, Y = Price in \$100k)
+            const xs = tf.tensor2d([1.0, 1.5, 2.0, 2.5, 3.0], [5, 1]);
+            const ys = tf.tensor2d([100, 150, 200, 250, 300], [5, 1]);
 
-            // Convert local file to Base64 to bypass server storage limitations
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onload = async function () {
-                const base64Content = reader.result.split(',')[1]; // Strip metadata header
-                document.getElementById('statusText').innerText = "📤 Uploading game package to cloud execution queue...";
-
-                // Push the binary directly into the GitHub repo via API
-                const uploadResponse = await fetch(`https://github.com{GH_USER}/${GH_REPO}/contents/runtime_binaries/app_target.apk`, {
-                    method: "PUT",
-                    headers: {
-                        "Authorization": `Bearer ${REPO_PAT}`,
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify({
-                        message: "Upload custom Saturn APK runtime asset",
-                        content: base64Content,
-                        branch: "legacy",
-                        // Force overwrite if file already exists
-                        sha: await getFileSha() 
-                    })
-                });
-
-                if (uploadResponse.ok) {
-                    document.getElementById('statusText').innerText = "🚀 Booting remote Android server node...";
-                    triggerCloudWorkflow();
-                } else {
-                    alert("Upload failed. Make sure your GitHub Token is configured correctly.");
-                    runBtn.disabled = false;
-                }
-            };
+            // 3. Train the model
+            await model.fit(xs, ys, {epochs: 200});
+            
+            document.getElementById('result').innerText = "Training complete! Ready for predictions.";
+            document.getElementById('sqftInput').disabled = false;
+            document.getElementById('predictBtn').disabled = false;
         }
 
-        async function getFileSha() {
-            try {
-                const res = await fetch(`https://github.com{GH_USER}/${GH_REPO}/contents/runtime_binaries/app_target.apk?ref=legacy`, {
-                    headers: { "Authorization": `Bearer ${REPO_PAT}` }
-                });
-                if (res.ok) {
-                    const data = await res.json();
-                    return data.sha;
-                }
-            } catch (e) {}
-            return null; // Return null if file doesn't exist yet
-        }
+        function predict() {
+            const val = parseFloat(document.getElementById('sqftInput').value);
+            if (isNaN(val)) return;
 
-        async function triggerCloudWorkflow() {
-            const response = await fetch(`https://github.com{GH_USER}/${GH_REPO}/actions/workflows/external-runner.yml/dispatches`, {
-                method: "POST",
-                headers: {
-                    "Authorization": `Bearer ${REPO_PAT}`,
-                    "Accept": "application/vnd.github+json",
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({ ref: "legacy" })
+            // Normalize input matching the training data scaling
+            const inputTensor = tf.tensor2d([val / 1000], [1, 1]);
+            const prediction = model.predict(inputTensor);
+            
+            // Get data back from the tensor
+            prediction.data().then(data => {
+                const estimatedPrice = (data[0]).toFixed(2);
+                document.getElementById('result').innerText = `Estimated Price: $${estimatedPrice}k`;
             });
-
-            if (response.ok) {
-                document.getElementById('statusText').innerText = "📺 Emulation started! Fetching screen feed...";
-                startVideoFeedPolling();
-            }
-        }
-
-        function startVideoFeedPolling() {
-            let ticker = 0;
-            setInterval(() => {
-                ticker++;
-                document.getElementById('statusText').innerText = `📺 Live Stream Running (Refresh Layer #${ticker})`;
-                document.getElementById('monitor').src = `workspace_screenshots/frame_1.png?t=` + new Date().getTime();
-            }, 6000); // Refreshes image view every 6 seconds
         }
     </script>
 </body>
