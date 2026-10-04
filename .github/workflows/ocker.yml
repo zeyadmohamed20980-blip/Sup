@@ -1,77 +1,51 @@
 name: External Target Binary Runner
 
 on:
-  workflow_dispatch:
-    inputs:
-      file_url:
-        description: 'Direct address of the application target file'
-        required: true
-      file_type:
-        description: 'Target format extension wrapper'
-        required: true
-        default: 'apk'
+  workflow_dispatch: # Triggered on demand by the web panel frontend
 
 permissions:
   contents: write
 
 jobs:
-  run-imported-file:
-    runs-on: macos-13 # Using macOS allows native, high-performance hardware accelerated emulation out-of-the-box
+  run-saturn-apk:
+    runs-on: macos-13 # Standard macOS nodes feature fast Android hardware acceleration out-of-the-box
     steps:
-    - name: Checkout Repository Assets
+    - name: Checkout Repository
       uses: actions/checkout@v4
+      with:
+        ref: legacy
 
-    - name: Set up Android Tools
-      if: ${{ github.event.inputs.file_type == 'apk' }}
+    - name: Setup Android Ecosystem
       uses: android-actions/setup-android@v3
 
-    - name: Download Target Application Package
-      run: |
-        mkdir -p runtime_binaries
-        curl -L "${{ github.event.inputs.file_url }}" -o "runtime_binaries/app_target.${{ github.event.inputs.file_type }}"
-
-    - name: Android Execution Layer (Emulator Boot and Display Capture)
-      if: ${{ github.event.inputs.file_type == 'apk' }}
+    - name: Spin up Hardware Accelerated Emulator and Run APK
       uses: reactivecircus/android-emulator-runner@v2
       with:
         api-level: 33
         target: google_apis
         arch: x86_64
         script: |
-          # 1. Wait for Android kernel boot sequences
+          # 1. Block execution until the device completes booting sequences
           adb wait-for-device
           
-          # 2. Sideload your dynamically specified target APK package
-          adb install runtime_binaries/app_target.apk
+          # 2. Sideload the APK file uploaded from your website form
+          if [ -f "runtime_binaries/app_target.apk" ]; then
+            adb install runtime_binaries/app_target.apk
+          else
+            echo "ERROR: Uploaded file missing from runtime storage directory!" && exit 1
+          fi
           
-          # 3. Pull package identifier details and launch the primary activity intent block
-          # NOTE: If launching a custom APK, replace this intent string with your app's main launcher activity!
-          adb shell monkey -p com.android.settings -c android.intent.category.LAUNCHER 1
-          sleep 12
+          # 3. Launch Saturn Llepie package layout
+          # Note: If your app uses a custom package ID, replace 'com.saturn.llepie' below with your package name!
+          adb shell monkey -p com.saturn.llepie -c android.intent.category.LAUNCHER 1
+          sleep 15 # Give the graphics window ample time to render asset configurations
           
-          # 4. Snap high-resolution UI layouts and route them back onto workspace assets
+          # 4. Snap layout configuration and route it to your webpage tracking directory
           mkdir -p workspace_screenshots
           adb shell screencap -p /sdcard/frame.png
           adb pull /sdcard/frame.png workspace_screenshots/frame_1.png
 
-    - name: Windows Execution Layer (Wine Engine Simulation)
-      if: ${{ github.event.inputs.file_type == 'exe' }}
-      run: |
-        # Setup Wine application layer compatibility frameworks for macOS
-        brew tap gromgit/homebrew-fuse
-        brew install --cask wine-stable
-        
-        # Configure headless structural screen frame definitions
-        mkdir -p workspace_screenshots
-        
-        # Boot executable window pathways
-        wine runtime_binaries/app_target.exe &
-        sleep 10
-        
-        # Take a snapshot of what the screen sees
-        screencapture -x workspace_screenshots/frame_1.png
-
-    - name: Update Live Web Stream Page Assets
+    - name: Push Screen Update directly onto Live Website
       uses: JamesIves/github-pages-deploy-action@v4
       with:
         folder: .
