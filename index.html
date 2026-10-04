@@ -3,57 +3,155 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Browser AI Model</title>
-    <!-- Load TensorFlow.js from a CDN -->
-    <script src="https://jsdelivr.net"></script>
+    <title>JouGPT - Premium AI</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body { display: flex; background-color: #212121; color: #ececf1; height: 100vh; overflow: hidden; }
+        
+        /* Sidebar Layout */
+        .sidebar { width: 260px; background-color: #171717; padding: 15px; display: flex; flex-direction: column; justify-content: space-between; }
+        .sidebar-top { display: flex; flex-direction: column; gap: 10px; }
+        .new-chat-btn { border: 1px solid #4d4d4d; border-radius: 5px; padding: 12px; color: white; background: transparent; cursor: pointer; text-align: left; font-size: 14px; }
+        .new-chat-btn:hover { background-color: #2a2b32; }
+        
+        /* Key input section */
+        .key-box { display: flex; flex-direction: column; gap: 5px; margin-top: 20px; }
+        .key-box label { font-size: 11px; color: #8e8e93; text-transform: uppercase; font-weight: bold; }
+        .key-input { background: #2f2f2f; border: 1px solid #424242; color: white; padding: 8px; border-radius: 4px; font-size: 12px; width: 100%; }
+        .status-badge { font-size: 12px; color: #10a37f; margin-top: 10px; }
+
+        /* Main Chat Window */
+        .main-content { flex: 1; display: flex; flex-direction: column; background-color: #212121; position: relative; }
+        .chat-container { flex: 1; overflow-y: auto; padding-bottom: 150px; display: flex; flex-direction: column; }
+        
+        /* Message Rows */
+        .message-row { display: flex; padding: 24px; border-bottom: 1px solid rgba(32,33,35,0.5); justify-content: center; }
+        .message-row.user { background-color: #212121; }
+        .message-row.ai { background-color: #2f2f2f; }
+        .message-wrapper { max-width: 768px; width: 100%; display: flex; gap: 20px; }
+        .avatar { width: 30px; height: 30px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; flex-shrink: 0; }
+        .user .avatar { background-color: #ec5e5e; color: white; }
+        .ai .avatar { background-color: #10a37f; color: white; }
+        .text { line-height: 1.6; font-size: 16px; word-break: break-word; }
+
+        /* User Input Area */
+        .input-area { position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent, #212121 30%); padding: 20px; display: flex; justify-content: center; }
+        .input-wrapper { max-width: 768px; width: 100%; position: relative; display: flex; background-color: #2f2f2f; border-radius: 12px; box-shadow: 0 0 15px rgba(0,0,0,0.1); border: 1px solid #424242; }
+        textarea { width: 100%; background: transparent; border: none; outline: none; color: white; padding: 14px 48px 14px 16px; resize: none; height: 52px; font-size: 16px; max-height: 200px; }
+        .send-button { position: absolute; right: 12px; bottom: 12px; background-color: #10a37f; border: none; border-radius: 6px; width: 28px; height: 28px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: white; }
+    </style>
 </head>
 <body>
-    <h1>House Price Predictor AI</h1>
-    <p>This AI model trains and runs entirely in your browser using TensorFlow.js!</p>
-    
-    <button onclick="trainModel()">1. Train Model</button>
-    <br><br>
-    <input type="number" id="sqftInput" placeholder="Enter Sq Ft (e.g., 2000)" disabled>
-    <button id="predictBtn" onclick="predict()" disabled>2. Predict Price</button>
-    <h3 id="result">Status: Click "Train Model" to begin.</h3>
+
+    <!-- Left ChatGPT Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-top">
+            <button class="new-chat-btn" onclick="window.location.reload()">➕ New Chat</button>
+            
+            <div class="key-box">
+                <label>JouGPT API Gateway Key</label>
+                <!-- Your key embedded as the default system value -->
+                <input type="password" id="apiKey" class="key-input" value="sk-abcdef1234567890abcdef1234567890abcdef12" placeholder="sk-...">
+            </div>
+        </div>
+        <div class="status-badge" id="status">● Cloud Matrix Connected</div>
+    </div>
+
+    <!-- Main Chat Workspace -->
+    <div class="main-content">
+        <div class="chat-container" id="chatContainer">
+            <div class="message-row ai">
+                <div class="message-wrapper">
+                    <div class="avatar">J</div>
+                    <div class="text">Welcome back. I am <strong>JouGPT</strong>. Powered by your customized API pipeline, I can instantly scan and process information about millions of tech devices, hardware frameworks, and global searches. Ask me anything!</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chat Input Bar -->
+        <div class="input-area">
+            <div class="input-wrapper">
+                <textarea id="userInput" placeholder="Ask JouGPT about any device or topic..."></textarea>
+                <button class="send-button" onclick="askJouGPT()">➔</button>
+            </div>
+        </div>
+    </div>
 
     <script>
-        let model;
+        const chatContainer = document.getElementById('chatContainer');
+        const userInput = document.getElementById('userInput');
+        const statusText = document.getElementById('status');
 
-        async function trainModel() {
-            document.getElementById('result').innerText = "Training model... please wait...";
+        async function askJouGPT() {
+            const query = userInput.value.trim();
+            const apiKey = document.getElementById('apiKey').value.trim();
             
-            // 1. Create a simple linear regression model
-            model = tf.sequential();
-            model.add(tf.layers.dense({units: 1, inputShape: [1]}));
-            model.compile({loss: 'meanSquaredError', optimizer: 'sgd'});
+            if (!query) return;
+            if (!apiKey) {
+                alert("Please ensure a valid API Key is entered in the sidebar.");
+                return;
+            }
 
-            // 2. Generate dummy training data (X = Sq Ft / 1000, Y = Price in \$100k)
-            const xs = tf.tensor2d([1.0, 1.5, 2.0, 2.5, 3.0], [5, 1]);
-            const ys = tf.tensor2d([100, 150, 200, 250, 300], [5, 1]);
+            // Display the user's chat bubble
+            appendMsg(query, 'user', 'U');
+            userInput.value = '';
+            statusText.innerText = "● JouGPT is searching...";
 
-            // 3. Train the model
-            await model.fit(xs, ys, {epochs: 200});
-            
-            document.getElementById('result').innerText = "Training complete! Ready for predictions.";
-            document.getElementById('sqftInput').disabled = false;
-            document.getElementById('predictBtn').disabled = false;
+            try {
+                // Connect to the secure AI completions API endpoint
+                const response = await fetch("https://openai.com", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify({
+                        model: "gpt-4o-mini", // Fast, highly accurate device knowledge model
+                        messages: [
+                            { role: "system", content: "You are JouGPT, a world-class technology expert with exhaustive global search data on devices, smartphones, hardware specs, and computing history." },
+                            { role: "user", content: query }
+                        ]
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (data.choices && data.choices[0].message) {
+                    const reply = data.choices[0].message.content;
+                    appendMsg(reply, 'ai', 'J');
+                } else if (data.error) {
+                    appendMsg(`API Configuration Error: ${data.error.message}`, 'ai', 'J');
+                } else {
+                    appendMsg("System received an uninterpretable data format response.", 'ai', 'J');
+                }
+
+            } catch (error) {
+                appendMsg("Network connection timed out trying to hit the model cluster.", 'ai', 'J');
+            }
+
+            statusText.innerText = "● Cloud Matrix Connected";
         }
 
-        function predict() {
-            const val = parseFloat(document.getElementById('sqftInput').value);
-            if (isNaN(val)) return;
-
-            // Normalize input matching the training data scaling
-            const inputTensor = tf.tensor2d([val / 1000], [1, 1]);
-            const prediction = model.predict(inputTensor);
-            
-            // Get data back from the tensor
-            prediction.data().then(data => {
-                const estimatedPrice = (data[0]).toFixed(2);
-                document.getElementById('result').innerText = `Estimated Price: $${estimatedPrice}k`;
-            });
+        function appendMsg(text, sender, icon) {
+            const row = document.createElement('div');
+            row.className = `message-row ${sender}`;
+            row.innerHTML = `
+                <div class="message-wrapper">
+                    <div class="avatar">${icon}</div>
+                    <div class="text">${text}</div>
+                </div>
+            `;
+            chatContainer.appendChild(row);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
         }
+
+        // Send on enter key press
+        userInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                askJouGPT();
+            }
+        });
     </script>
 </body>
 </html>
