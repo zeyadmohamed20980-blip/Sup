@@ -1,0 +1,78 @@
+name: External Target Binary Runner
+
+on:
+  workflow_dispatch:
+    inputs:
+      file_url:
+        description: 'Direct address of the application target file'
+        required: true
+      file_type:
+        description: 'Target format extension wrapper'
+        required: true
+        default: 'apk'
+
+permissions:
+  contents: write
+
+jobs:
+  run-imported-file:
+    runs-on: macos-13 # Using macOS allows native, high-performance hardware accelerated emulation out-of-the-box
+    steps:
+    - name: Checkout Repository Assets
+      uses: actions/checkout@v4
+
+    - name: Set up Android Tools
+      if: ${{ github.event.inputs.file_type == 'apk' }}
+      uses: android-actions/setup-android@v3
+
+    - name: Download Target Application Package
+      run: |
+        mkdir -p runtime_binaries
+        curl -L "${{ github.event.inputs.file_url }}" -o "runtime_binaries/app_target.${{ github.event.inputs.file_type }}"
+
+    - name: Android Execution Layer (Emulator Boot and Display Capture)
+      if: ${{ github.event.inputs.file_type == 'apk' }}
+      uses: reactivecircus/android-emulator-runner@v2
+      with:
+        api-level: 33
+        target: google_apis
+        arch: x86_64
+        script: |
+          # 1. Wait for Android kernel boot sequences
+          adb wait-for-device
+          
+          # 2. Sideload your dynamically specified target APK package
+          adb install runtime_binaries/app_target.apk
+          
+          # 3. Pull package identifier details and launch the primary activity intent block
+          # NOTE: If launching a custom APK, replace this intent string with your app's main launcher activity!
+          adb shell monkey -p com.android.settings -c android.intent.category.LAUNCHER 1
+          sleep 12
+          
+          # 4. Snap high-resolution UI layouts and route them back onto workspace assets
+          mkdir -p workspace_screenshots
+          adb shell screencap -p /sdcard/frame.png
+          adb pull /sdcard/frame.png workspace_screenshots/frame_1.png
+
+    - name: Windows Execution Layer (Wine Engine Simulation)
+      if: ${{ github.event.inputs.file_type == 'exe' }}
+      run: |
+        # Setup Wine application layer compatibility frameworks for macOS
+        brew tap gromgit/homebrew-fuse
+        brew install --cask wine-stable
+        
+        # Configure headless structural screen frame definitions
+        mkdir -p workspace_screenshots
+        
+        # Boot executable window pathways
+        wine runtime_binaries/app_target.exe &
+        sleep 10
+        
+        # Take a snapshot of what the screen sees
+        screencapture -x workspace_screenshots/frame_1.png
+
+    - name: Update Live Web Stream Page Assets
+      uses: JamesIves/github-pages-deploy-action@v4
+      with:
+        folder: .
+        branch: gh-pages
