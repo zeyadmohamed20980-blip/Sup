@@ -3,51 +3,101 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Universal Cloud App Runner</title>
+    <title>Saturn Llepie Cloud Runner</title>
     <style>
         body { background-color: #121212; color: #ffffff; font-family: sans-serif; text-align: center; padding: 20px; }
-        input, select, button { padding: 12px; margin: 8px; border-radius: 6px; border: 1px solid #444; font-size: 14px; }
-        input { width: 350px; background: #222; color: #fff; }
-        button { background-color: #238636; color: white; cursor: pointer; font-weight: bold; }
+        .control-box { background: #1f1f1f; padding: 20px; border-radius: 8px; display: inline-block; margin-top: 20px; border: 1px solid #333; }
+        input[type="file"], button { padding: 12px; margin: 8px; border-radius: 6px; border: 1px solid #444; font-size: 14px; }
+        button { background-color: #238636; color: white; cursor: pointer; font-weight: bold; border: none; }
         button:hover { background-color: #2ea043; }
+        button:disabled { background-color: #555; cursor: not-allowed; }
         .gallery { display: flex; flex-wrap: wrap; justify-content: center; gap: 15px; margin-top: 30px; }
-        .frame { border: 3px solid #333; border-radius: 8px; width: 100%; max-width: 600px; background: #000; min-height: 200px; }
+        .frame { border: 3px solid #333; border-radius: 8px; width: 100%; max-width: 500px; background: #000; min-height: 300px; }
+        #statusText { color: #58a6ff; font-weight: bold; }
     </style>
 </head>
 <body>
-    <h1>🚀 Universal Cloud App Executor</h1>
-    <p>Upload or link any pre-compiled app binary to spin it up inside a cloud node execution block.</p>
+    <h1>🪐 Saturn Llepie Cloud Web Player</h1>
+    <p>Upload your custom compiled Saturn APK directly from your computer files to run it on a cloud server.</p>
 
-    <div>
-        <input type="text" id="fileUrl" placeholder="Paste direct .apk or .exe download URL here...">
-        <select id="osType">
-            <option value="apk">Android (.apk)</option>
-            <option value="exe">Windows (.exe)</option>
-        </select>
-        <button onclick="triggerCloudRunner()">Execute Binary</button>
+    <div class="control-box">
+        <input type="file" id="localFile" accept=".apk">
+        <button id="runBtn" onclick="uploadAndExecute()">Launch Saturn APK</button>
     </div>
 
     <div class="gallery">
         <div>
-            <h3 id="statusText">Server Monitor View (Idle)</h3>
-            <img id="monitor" class="frame" src="workspace_screenshots/frame_1.png" alt="Awaiting deployment trigger...">
+            <h3 id="statusText">System Monitor: Standing By (Idle)</h3>
+            <img id="monitor" class="frame" src="workspace_screenshots/frame_1.png" alt="Waiting for file upload trigger...">
         </div>
     </div>
 
     <script>
-        // REPLACE THESE WITH YOUR EXACT REPOSITORY DETAILS
+        // === CONFIGURATION (FILL THESE OUT) ===
         const GH_USER = "YOUR_GITHUB_USERNAME"; 
         const GH_REPO = "YOUR_REPO_NAME";
-        // To trigger workflows from a webpage, you need a GitHub Personal Access Token (Fine-grained or Classic)
         const REPO_PAT = "YOUR_GITHUB_PERSONAL_ACCESS_TOKEN"; 
+        // ======================================
 
-        async function triggerCloudRunner() {
-            const fileUrl = document.getElementById('fileUrl').value;
-            const osType = document.getElementById('osType').value;
-            if(!fileUrl) return alert("Please enter a valid application download link!");
+        async function uploadAndExecute() {
+            const fileInput = document.getElementById('localFile');
+            const runBtn = document.getElementById('runBtn');
+            
+            if (fileInput.files.length === 0) {
+                return alert("Please select a Saturn APK file from your computer first!");
+            }
 
-            document.getElementById('statusText').innerText = "🔄 Spinning up server instance... Please wait.";
+            const file = fileInput.files[0];
+            runBtn.disabled = true;
+            document.getElementById('statusText').innerText = "⏳ Reading your file asset... Please wait.";
 
+            // Convert local file to Base64 to bypass server storage limitations
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = async function () {
+                const base64Content = reader.result.split(',')[1]; // Strip metadata header
+                document.getElementById('statusText').innerText = "📤 Uploading game package to cloud execution queue...";
+
+                // Push the binary directly into the GitHub repo via API
+                const uploadResponse = await fetch(`https://github.com{GH_USER}/${GH_REPO}/contents/runtime_binaries/app_target.apk`, {
+                    method: "PUT",
+                    headers: {
+                        "Authorization": `Bearer ${REPO_PAT}`,
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        message: "Upload custom Saturn APK runtime asset",
+                        content: base64Content,
+                        branch: "legacy",
+                        // Force overwrite if file already exists
+                        sha: await getFileSha() 
+                    })
+                });
+
+                if (uploadResponse.ok) {
+                    document.getElementById('statusText').innerText = "🚀 Booting remote Android server node...";
+                    triggerCloudWorkflow();
+                } else {
+                    alert("Upload failed. Make sure your GitHub Token is configured correctly.");
+                    runBtn.disabled = false;
+                }
+            };
+        }
+
+        async function getFileSha() {
+            try {
+                const res = await fetch(`https://github.com{GH_USER}/${GH_REPO}/contents/runtime_binaries/app_target.apk?ref=legacy`, {
+                    headers: { "Authorization": `Bearer ${REPO_PAT}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    return data.sha;
+                }
+            } catch (e) {}
+            return null; // Return null if file doesn't exist yet
+        }
+
+        async function triggerCloudWorkflow() {
             const response = await fetch(`https://github.com{GH_USER}/${GH_REPO}/actions/workflows/external-runner.yml/dispatches`, {
                 method: "POST",
                 headers: {
@@ -55,27 +105,22 @@
                     "Accept": "application/vnd.github+json",
                     "Content-Type": "application/json"
                 },
-                body: JSON.stringify({
-                    ref: "legacy", // Your branch name
-                    inputs: { file_url: fileUrl, file_type: osType }
-                })
+                body: JSON.stringify({ ref: "legacy" })
             });
 
-            if(response.ok) {
-                alert("Cloud execution successfully requested! Stream connection starting.");
-                startPolling();
-            } else {
-                alert("Failed to connect to runner API. Check your Token permissions.");
+            if (response.ok) {
+                document.getElementById('statusText').innerText = "📺 Emulation started! Fetching screen feed...";
+                startVideoFeedPolling();
             }
         }
 
-        function startPolling() {
-            let count = 0;
+        function startVideoFeedPolling() {
+            let ticker = 0;
             setInterval(() => {
-                count++;
-                document.getElementById('statusText').innerText = `📺 Live stream running (Update check #${count})`;
+                ticker++;
+                document.getElementById('statusText').innerText = `📺 Live Stream Running (Refresh Layer #${ticker})`;
                 document.getElementById('monitor').src = `workspace_screenshots/frame_1.png?t=` + new Date().getTime();
-            }, 6000);
+            }, 6000); // Refreshes image view every 6 seconds
         }
     </script>
 </body>
